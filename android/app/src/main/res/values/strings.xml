@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">it-support-system</string>
+    <string name="title_activity_main">it-support-system</string>
+    <string name="package_name">com.mubarak.itsupport</string>
+    <string name="custom_url_scheme">com.mubarak.itsupport</string>
+</resources>

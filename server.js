@@ -1,0 +1,38 @@
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+const ticketRoutes = require("./routes/ticketRoutes");
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+app.use(express.static("public"));
+
+// اتصال MongoDB
+mongoose.connect(
+  "mongodb://admin:99283644Mm@cluster2-shard-00-00.5t2ymm.mongodb.net:27017,cluster2-shard-00-01.5t2ymm.mongodb.net:27017,cluster2-shard-00-02.5t2ymm.mongodb.net/it_support?ssl=true&replicaSet=atlas-pfscsf-shard-0&authSource=admin&retryWrites=true&w=majority"
+)
+.then(() => console.log("MongoDB Connected"))
+.catch(err => console.log(err));
+
+// Socket.io
+const http = require("http").createServer(app);
+const { Server } = require("socket.io");
+const io = new Server(http, { cors: { origin: "*" } });
+
+io.on("connection", (socket) => {
+  console.log("عميل متصل: " + socket.id);
+});
+
+app.set("io", io);
+
+// Routes
+app.use("/api", ticketRoutes);
+
+app.get("/", (req, res) => {
+  res.send("IT Support System Running");
+});
+
+http.listen(5000, () => {
+  console.log("Server started on port 5000");
+});

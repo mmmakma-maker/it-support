@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>IT Support Ticket System</title>
+
+<link rel="manifest" href="/manifest.json">
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background-color: #f4f4f4; }
+    button { margin-right: 5px; padding: 5px 10px; cursor: pointer; }
+    .status-open { background-color: #fff8c4; }
+    .status-in_progress { background-color: #c4e0ff; }
+    .status-closed { background-color: #c4ffc4; }
+  </style>
+</head>
+<body>
+
+<h1>إضافة طلب دعم فني</h1>
+<form id="ticketForm">
+  <label>العنوان:</label><br>
+  <input type="text" id="title" required><br><br>
+
+  <label>الوصف:</label><br>
+  <textarea id="description"></textarea><br><br>
+
+  <label>القسم:</label><br>
+  <select id="department" required>
+    <option value="support">دعم فني</option>
+    <option value="network">شبكات</option>
+    <option value="development">برمجة</option>
+  </select><br><br>
+
+  <label>من أضاف الطلب:</label><br>
+  <input type="text" id="createdBy"><br><br>
+
+  <label>الموقع:</label><br>
+  <input type="text" id="location"><br><br>
+
+  <button type="submit">إرسال الطلب</button>
+</form>
+
+<h2>قائمة الطلبات</h2>
+<label>بحث:</label>
+<input type="text" id="search" placeholder="ابحث بالعنوان أو القسم">
+
+<table id="ticketsTable">
+  <thead>
+    <tr>
+      <th>العنوان</th>
+      <th>القسم</th>
+      <th>الوصف</th>
+      <th>من أضاف</th>
+      <th>الموقع</th>
+      <th>الحالة</th>
+      <th>المسؤول</th>
+      <th>إجراءات</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+const form = document.getElementById("ticketForm");
+const ticketsTableBody = document.querySelector("#ticketsTable tbody");
+const searchInput = document.getElementById("search");
+const notificationSound = new Audio("/sounds/ping.mp3");
+
+// إضافة طلب جديد
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const data = {
+    title: document.getElementById("title").value,
+    description: document.getElementById("description").value,
+    department: document.getElementById("department").value,
+    createdBy: document.getElementById("createdBy").value,
+    location: document.getElementById("location").value
+  };
+
+  try {
+    const res = await fetch("/api/ticket", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+
+    if (!res.ok) throw new Error("فشل إرسال الطلب");
+
+    const ticket = await res.json(); 
+    addTicketToTable(ticket); 
+    form.reset();                   
+  } catch (err) {
+    alert("خطأ: " + err.message);
+  }
+});
+
+// فلترة البحث
+searchInput.addEventListener("input", () => {
+  const term = searchInput.value.toLowerCase();
+  document.querySelectorAll("#ticketsTable tbody tr").forEach(tr => {
+    const title = tr.children[0].textContent.toLowerCase();
+    const department = tr.children[1].textContent.toLowerCase();
+    tr.style.display = (title.includes(term) || department.includes(term)) ? "" : "none";
+  });
+});
+
+// إضافة صف جديد
+function addTicketToTable(ticket) {
+  const tr = document.createElement("tr");
+  tr.id = ticket._id;
+  tr.className = "status-" + ticket.status;
+  tr.innerHTML = `
+    <td>${ticket.title}</td>
+    <td>${ticket.department}</td>
+    <td>${ticket.description || ""}</td>
+    <td>${ticket.createdBy || ""}</td>
+    <td>${ticket.location || ""}</td>
+    <td>${ticket.status}</td>
+    <td>${ticket.assignedTo || ""}</td>
+    <td>
+      ${ticket.status === "open" ? `<button onclick="assignTicket('${ticket._id}')">استلام الطلب</button>` : ""}
+      ${ticket.status !== "closed" ? `<button onclick="closeTicket('${ticket._id}')">إغلاق الطلب</button>` : ""}
+    </td>
+  `;
+  ticketsTableBody.appendChild(tr);
+}
+
+// تحديث صف موجود
+function updateTicketInTable(ticket) {
+  const tr = document.getElementById(ticket._id);
+  if (!tr) return;
+  tr.className = "status-" + ticket.status;
+  tr.innerHTML = `
+    <td>${ticket.title}</td>
+    <td>${ticket.department}</td>
+    <td>${ticket.description || ""}</td>
+    <td>${ticket.createdBy || ""}</td>
+    <td>${ticket.location || ""}</td>
+    <td>${ticket.status}</td>
+    <td>${ticket.assignedTo || ""}</td>
+    <td>
+      ${ticket.status === "open" ? `<button onclick="assignTicket('${ticket._id}')">استلام الطلب</button>` : ""}
+      ${ticket.status !== "closed" ? `<button onclick="closeTicket('${ticket._id}')">إغلاق الطلب</button>` : ""}
+    </td>
+  `;
+}
+
+// تحميل الطلبات عند فتح الصفحة
+async function loadTickets() {
+  try {
+    const res = await fetch("/api/tickets");
+    const tickets = await res.json();
+    ticketsTableBody.innerHTML = "";
+    tickets.forEach(addTicketToTable);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+// استلام الطلب
+async function assignTicket(id) {
+  const name = prompt("ادخل اسمك لاستلام الطلب:");
+  if (!name) return;
+  try {
+    await fetch(`/api/ticket/${id}/assign`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assignedTo: name })
+    });
+  } catch (err) {
+    alert("خطأ: " + err.message);
+  }
+}
+
+// إغلاق الطلب
+async function closeTicket(id) {
+  try {
+    await fetch(`/api/ticket/${id}/close`, { method: "PUT" });
+  } catch (err) {
+    alert("خطأ: " + err.message);
+  }
+}
+
+// إشعارات Socket.io
+socket.on("ticketAdded", (ticket) => {
+  addTicketToTable(ticket);
+  notificationSound.play();
+  alert(`طلب جديد تم إضافته:\nالعنوان: ${ticket.title}\nالقسم: ${ticket.department}`);
+});
+
+socket.on("ticketUpdated", (ticket) => {
+  updateTicketInTable(ticket);
+  notificationSound.play();
+  alert(`تم تحديث طلب:\nالعنوان: ${ticket.title}\nالحالة الجديدة: ${ticket.status}`);
+});
+
+// تحميل الطلبات عند بدء التشغيل
+loadTickets();
+</script>
+</body>
+</html>
