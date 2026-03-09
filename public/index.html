@@ -1,204 +1,297 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>IT Support Ticket System</title>
-
-<link rel="manifest" href="/manifest.json">
-
+  <title>IT Support Dashboard</title>
+  <link rel="manifest" href="/manifest.json">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    body { font-family: Arial, sans-serif; margin: 20px; background:#f9f9f9; }
+    #logoutBtn { float:right; background:red; color:white; padding:8px; border:none; cursor:pointer; border-radius:4px; }
+    h1 { margin-bottom:10px; }
+
+    #stats { display:flex; gap:20px; margin-bottom:20px; }
+    .stat-card { flex:1; padding:15px; border-radius:8px; text-align:center; color:white; font-weight:bold; box-shadow:0 2px 5px rgba(0,0,0,0.1); }
+    .total { background:#007BFF; }
+    .assigned { background:#28a745; }
+    .open { background:#ffc107; color:black; }
+
+    table { border-collapse: collapse; width: 100%; background:white; border-radius:8px; overflow:hidden; margin-top:10px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
     th { background-color: #f4f4f4; }
-    button { margin-right: 5px; padding: 5px 10px; cursor: pointer; }
+    button { margin-right: 5px; padding: 5px 10px; cursor: pointer; border:none; border-radius:4px; }
     .status-open { background-color: #fff8c4; }
     .status-in_progress { background-color: #c4e0ff; }
     .status-closed { background-color: #c4ffc4; }
+
+    input, textarea, select { width:100%; padding:6px; margin-bottom:8px; font-size:14px; border-radius:4px; border:1px solid #ccc; }
+
+    .sidebar-form { flex: 0 0 300px; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; font-size: 14px; }
+    .sidebar-form h2 { text-align: center; margin-bottom: 15px; color: #333; font-size: 18px; }
+    .sidebar-form label { font-weight: bold; color: #555; }
+    .sidebar-form input, .sidebar-form textarea, .sidebar-form select { width: 100%; padding: 8px; font-size: 14px; border-radius: 5px; border:1px solid #ccc; transition: 0.2s; }
+    .sidebar-form input:focus, .sidebar-form textarea:focus, .sidebar-form select:focus { border-color: #007BFF; box-shadow: 0 0 5px rgba(0,123,255,0.3); outline: none; }
+    .sidebar-form textarea { resize: vertical; min-height: 60px; }
+    .sidebar-form button { width: 100%; padding: 10px; font-size: 15px; border-radius: 6px; background:#007BFF; color:white; border:none; cursor:pointer; font-weight:bold; transition: 0.2s; }
+    .sidebar-form button:hover { background:#0056b3; }
+
+    .chart-container { height:250px; width:100%; margin-bottom:20px; }
+
+    #employeeStats { margin-top:20px; }
+    #employeeStats table { width:100%; }
+    #employeeStats th, #employeeStats td { text-align:center; }
+
+    #notifications{ position:fixed; top:20px; right:20px; z-index:999; }
+    .notification{ background:#007BFF; color:white; padding:10px; margin-bottom:10px; border-radius:6px; }
+
+    #filters { margin-bottom:15px; display:flex; gap:10px; align-items:center; }
+    #filters input, #filters select { width:auto; }
   </style>
 </head>
 <body>
 
-<h1>إضافة طلب دعم فني</h1>
-<form id="ticketForm">
-  <label>العنوان:</label><br>
-  <input type="text" id="title" required><br><br>
+<button id="logoutBtn">Logout</button>
+<h1>IT Support Dashboard</h1>
 
-  <label>الوصف:</label><br>
-  <textarea id="description"></textarea><br><br>
+<div style="display:flex; gap:20px;">
 
-  <label>القسم:</label><br>
-  <select id="department" required>
-    <option value="support">دعم فني</option>
-    <option value="network">شبكات</option>
-    <option value="development">برمجة</option>
-  </select><br><br>
+  <div class="sidebar-form">
+    <h2>إضافة طلب جديد</h2>
+    <form id="ticketForm">
+      <label>العنوان:</label>
+      <input type="text" id="title" required placeholder="أدخل عنوان الطلب">
+      <label>القسم:</label>
+      <select id="department" required>
+        <option value="support">دعم فني</option>
+        <option value="network">شبكات</option>
+        <option value="development">برمجة</option>
+      </select>
+      <label>الوصف:</label>
+      <textarea id="description" placeholder="صف المشكلة باختصار"></textarea>
+      <label>الموقع:</label>
+      <input type="text" id="location" placeholder="مثال: الطابق الثاني / المكتب A3">
+      <label>الأولوية:</label>
+      <select id="priority">
+        <option value="low">منخفض</option>
+        <option value="medium">متوسط</option>
+        <option value="high">عالي</option>
+      </select>
+      <label>من أضاف الطلب:</label>
+      <input type="text" id="createdBy" readonly>
+      <button type="submit">إرسال الطلب</button>
+    </form>
+  </div>
 
-  <label>من أضاف الطلب:</label><br>
-  <input type="text" id="createdBy"><br><br>
+  <div style="flex:1;">
+    <div id="stats">
+      <div class="stat-card total"><h3>إجمالي الطلبات</h3><p id="totalTickets">0</p></div>
+      <div class="stat-card assigned"><h3>الطلبات المستلمة</h3><p id="assignedTickets">0</p></div>
+      <div class="stat-card open"><h3>الطلبات المفتوحة</h3><p id="openTickets">0</p></div>
+    </div>
 
-  <label>الموقع:</label><br>
-  <input type="text" id="location"><br><br>
+    <div id="filters">
+      <label>بحث:</label>
+      <input type="text" id="search" placeholder="ابحث بالعنوان أو القسم">
+      <label>فلترة القسم:</label>
+      <select id="departmentFilter">
+        <option value="">الكل</option>
+        <option value="support">دعم فني</option>
+        <option value="network">شبكات</option>
+        <option value="development">برمجة</option>
+      </select>
+    </div>
 
-  <button type="submit">إرسال الطلب</button>
-</form>
+    <div class="chart-container"><canvas id="ticketChart"></canvas></div>
 
-<h2>قائمة الطلبات</h2>
-<label>بحث:</label>
-<input type="text" id="search" placeholder="ابحث بالعنوان أو القسم">
+    <div id="employeeStats">
+      <h3>تقييم الموظفين</h3>
+      <table border="1">
+        <thead><tr><th>الموظف</th><th>القسم</th><th>عدد الطلبات المستلمة</th><th>عدد الطلبات المغلقة</th></tr></thead>
+        <tbody id="employeeTableBody"></tbody>
+      </table>
+      <div class="chart-container"><canvas id="employeeChart"></canvas></div>
+    </div>
 
-<table id="ticketsTable">
-  <thead>
-    <tr>
-      <th>العنوان</th>
-      <th>القسم</th>
-      <th>الوصف</th>
-      <th>من أضاف</th>
-      <th>الموقع</th>
-      <th>الحالة</th>
-      <th>المسؤول</th>
-      <th>إجراءات</th>
-    </tr>
-  </thead>
-  <tbody></tbody>
-</table>
+    <table id="ticketsTable">
+      <thead>
+        <tr>
+          <th>العنوان</th><th>القسم</th><th>الوصف</th><th>من أضاف</th><th>الموقع</th>
+          <th>الأولوية</th><th>وقت الطلب</th><th>الحالة</th><th>المسؤول</th><th>إجراءات</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
 
-<script src="/socket.io/socket.io.js"></script>
+<div id="notifications"></div>
+
 <script>
-const socket = io();
-const form = document.getElementById("ticketForm");
+const employees = [
+  { name:'أحمد', dept:'network' }, { name:'منذر', dept:'network' },
+  { name:'حارث', dept:'support' }, { name:'مبارك', dept:'support' }, { name:'شروق', dept:'support' },
+  { name:'عائشة', dept:'support' }, { name:'حيدر', dept:'support' },
+  { name:'فاطمة السعدي', dept:'development' }, { name:'سهيل', dept:'development' },
+  { name:'فاطمة البداعي', dept:'development' }, { name:'زاهد', dept:'development' }
+];
+
+const token = localStorage.getItem("token");
+const userName = localStorage.getItem("user");
+if(!token) window.location.href="/login.html";
+document.getElementById("createdBy").value=userName||"";
+
+document.getElementById("logoutBtn").addEventListener("click",()=>{
+  localStorage.removeItem("token"); localStorage.removeItem("user");
+  window.location.href="/login.html";
+});
+
+const socket = io("http://localhost:5000"); 
+const notificationSound = new Audio("/sounds/ping.mp3");
+function showNotification(msg){
+  const div=document.createElement("div"); div.className="notification"; div.textContent=msg;
+  document.getElementById("notifications").appendChild(div);
+  setTimeout(()=>div.remove(),4000);
+}
+
+socket.on("ticketAdded",(ticket)=>{ addTicketToTable(ticket); notificationSound.play(); showNotification(`طلب جديد: ${ticket.title}`); refreshStats(); });
+socket.on("ticketUpdated",(ticket)=>{ updateTicketInTable(ticket); notificationSound.play(); showNotification(`تم تحديث طلب: ${ticket.title}`); refreshStats(); });
+
 const ticketsTableBody = document.querySelector("#ticketsTable tbody");
 const searchInput = document.getElementById("search");
-const notificationSound = new Audio("/sounds/ping.mp3");
+const departmentFilter = document.getElementById("departmentFilter");
 
-// إضافة طلب جديد
-form.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const data = {
-    title: document.getElementById("title").value,
-    description: document.getElementById("description").value,
-    department: document.getElementById("department").value,
-    createdBy: document.getElementById("createdBy").value,
-    location: document.getElementById("location").value
-  };
+searchInput.addEventListener("input", filterTickets);
+departmentFilter.addEventListener("change", filterTickets);
 
-  try {
-    const res = await fetch("/api/ticket", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data)
-    });
-
-    if (!res.ok) throw new Error("فشل إرسال الطلب");
-
-    const ticket = await res.json(); 
-    addTicketToTable(ticket); 
-    form.reset();                   
-  } catch (err) {
-    alert("خطأ: " + err.message);
-  }
-});
-
-// فلترة البحث
-searchInput.addEventListener("input", () => {
-  const term = searchInput.value.toLowerCase();
-  document.querySelectorAll("#ticketsTable tbody tr").forEach(tr => {
-    const title = tr.children[0].textContent.toLowerCase();
-    const department = tr.children[1].textContent.toLowerCase();
-    tr.style.display = (title.includes(term) || department.includes(term)) ? "" : "none";
+function filterTickets(){
+  const term=searchInput.value.toLowerCase();
+  const dept=departmentFilter.value;
+  document.querySelectorAll("#ticketsTable tbody tr").forEach(tr=>{
+    const title=tr.children[0].textContent.toLowerCase();
+    const department=tr.children[1].textContent.toLowerCase();
+    const show=(title.includes(term)||department.includes(term)) && (!dept || department===dept);
+    tr.style.display=show?"":"none";
   });
-});
+}
 
-// إضافة صف جديد
-function addTicketToTable(ticket) {
-  const tr = document.createElement("tr");
-  tr.id = ticket._id;
-  tr.className = "status-" + ticket.status;
-  tr.innerHTML = `
-    <td>${ticket.title}</td>
-    <td>${ticket.department}</td>
-    <td>${ticket.description || ""}</td>
-    <td>${ticket.createdBy || ""}</td>
-    <td>${ticket.location || ""}</td>
-    <td>${ticket.status}</td>
-    <td>${ticket.assignedTo || ""}</td>
-    <td>
-      ${ticket.status === "open" ? `<button onclick="assignTicket('${ticket._id}')">استلام الطلب</button>` : ""}
-      ${ticket.status !== "closed" ? `<button onclick="closeTicket('${ticket._id}')">إغلاق الطلب</button>` : ""}
-    </td>
-  `;
+async function loadTickets(){
+  try{
+    const res=await fetch("http://localhost:5000/api/tickets",{ headers:{ "Authorization":"Bearer "+token } });
+    const tickets=await res.json();
+    ticketsTableBody.innerHTML="";
+    tickets.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).forEach(addTicketToTable);
+    refreshStats();
+  }catch(err){ console.error(err); }
+}
+
+function addTicketToTable(ticket){
+  const tr=document.createElement("tr"); tr.id=ticket._id; tr.className="status-"+ticket.status;
+  tr.innerHTML=`<td>${ticket.title}</td>
+  <td>${ticket.department}</td>
+  <td>${ticket.description||""}</td>
+  <td>${ticket.createdBy||""}</td>
+  <td>${ticket.location||""}</td>
+  <td>${ticket.priority||""}</td>
+  <td>${ticket.createdAt?new Date(ticket.createdAt).toLocaleString():""}</td>
+  <td>${ticket.status}</td>
+  <td>${ticket.assignedTo||""}</td>
+  <td>
+    ${ticket.status==="open"?`<button onclick="assignTicket('${ticket._id}')">استلام الطلب</button>`:""}
+    ${ticket.status!=="closed"?`<button onclick="closeTicket('${ticket._id}')">إغلاق الطلب</button>`:""}
+  </td>`;
   ticketsTableBody.appendChild(tr);
 }
 
-// تحديث صف موجود
-function updateTicketInTable(ticket) {
-  const tr = document.getElementById(ticket._id);
-  if (!tr) return;
-  tr.className = "status-" + ticket.status;
-  tr.innerHTML = `
-    <td>${ticket.title}</td>
-    <td>${ticket.department}</td>
-    <td>${ticket.description || ""}</td>
-    <td>${ticket.createdBy || ""}</td>
-    <td>${ticket.location || ""}</td>
-    <td>${ticket.status}</td>
-    <td>${ticket.assignedTo || ""}</td>
-    <td>
-      ${ticket.status === "open" ? `<button onclick="assignTicket('${ticket._id}')">استلام الطلب</button>` : ""}
-      ${ticket.status !== "closed" ? `<button onclick="closeTicket('${ticket._id}')">إغلاق الطلب</button>` : ""}
-    </td>
-  `;
+function updateTicketInTable(ticket){
+  const tr=document.getElementById(ticket._id); if(!tr) return;
+  tr.className="status-"+ticket.status;
+  tr.children[0].textContent=ticket.title; tr.children[1].textContent=ticket.department;
+  tr.children[2].textContent=ticket.description||""; tr.children[3].textContent=ticket.createdBy||"";
+  tr.children[4].textContent=ticket.location||""; tr.children[5].textContent=ticket.priority||"";
+  tr.children[6].textContent=ticket.createdAt?new Date(ticket.createdAt).toLocaleString():"";
+  tr.children[7].textContent=ticket.status; tr.children[8].textContent=ticket.assignedTo||"";
 }
 
-// تحميل الطلبات عند فتح الصفحة
-async function loadTickets() {
-  try {
-    const res = await fetch("/api/tickets");
-    const tickets = await res.json();
-    ticketsTableBody.innerHTML = "";
-    tickets.forEach(addTicketToTable);
-  } catch (err) {
-    console.error(err);
-  }
+function refreshStats(){
+  const tickets=Array.from(ticketsTableBody.children).map(tr=>({
+    assignedTo: tr.children[8].textContent,
+    status: tr.children[7].textContent,
+    department: tr.children[1].textContent
+  }));
+  updateStats(tickets); renderChart(tickets); updateEmployeeStats(tickets);
 }
 
-// استلام الطلب
-async function assignTicket(id) {
-  const name = prompt("ادخل اسمك لاستلام الطلب:");
-  if (!name) return;
-  try {
-    await fetch(`/api/ticket/${id}/assign`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ assignedTo: name })
+function updateStats(tickets){
+  document.getElementById("totalTickets").textContent=tickets.length;
+  document.getElementById("assignedTickets").textContent=tickets.filter(t=>t.assignedTo).length;
+  document.getElementById("openTickets").textContent=tickets.filter(t=>t.status==="open").length;
+}
+
+let ticketChart;
+function renderChart(tickets){
+  const ctx=document.getElementById('ticketChart').getContext('2d');
+  const statusCounts={
+    open: tickets.filter(t=>t.status==='open').length,
+    in_progress: tickets.filter(t=>t.status==='in_progress').length,
+    closed: tickets.filter(t=>t.status==='closed').length
+  };
+  if(ticketChart) ticketChart.destroy();
+  ticketChart=new Chart(ctx,{
+    type:'pie',
+    data:{ labels:['مفتوحة','قيد التنفيذ','مغلقة'], datasets:[{ data:[statusCounts.open,statusCounts.in_progress,statusCounts.closed], backgroundColor:['#ffc107','#c4e0ff','#28a745'] }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
+  });
+}
+
+let employeeChart;
+function updateEmployeeStats(tickets){
+  const tableBody=document.getElementById("employeeTableBody"); tableBody.innerHTML="";
+  const dataMap=employees.map(emp=>{
+    const empTickets=tickets.filter(t=>t.assignedTo===emp.name);
+    return {...emp, received:empTickets.length, closed:empTickets.filter(t=>t.status==='closed').length};
+  });
+  dataMap.forEach(emp=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${emp.name}</td><td>${emp.dept}</td><td>${emp.received}</td><td>${emp.closed}</td>`;
+    tableBody.appendChild(tr);
+  });
+  const ctx=document.getElementById('employeeChart').getContext('2d');
+  if(employeeChart) employeeChart.destroy();
+  employeeChart=new Chart(ctx,{ type:'bar', data:{ labels:dataMap.map(e=>e.name), datasets:[{ label:'الطلبات المغلقة', data:dataMap.map(e=>e.closed), backgroundColor:dataMap.map(e=>{ if(e.dept==='network') return '#007BFF'; if(e.dept==='support') return '#28a745'; return '#ffc107'; }) }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} } });
+}
+
+async function assignTicket(id){
+  const name=prompt("ادخل اسمك لاستلام الطلب:"); if(!name) return;
+  try{
+    await fetch(`http://localhost:5000/api/ticket/${id}/assign`,{
+      method:"PUT",
+      headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+token },
+      body: JSON.stringify({ assignedTo:name })
     });
-  } catch (err) {
-    alert("خطأ: " + err.message);
-  }
+    loadTickets();
+  }catch(err){ showNotification("خطأ: "+err.message); }
 }
 
-// إغلاق الطلب
-async function closeTicket(id) {
-  try {
-    await fetch(`/api/ticket/${id}/close`, { method: "PUT" });
-  } catch (err) {
-    alert("خطأ: " + err.message);
-  }
+async function closeTicket(id){
+  try{
+    await fetch(`http://localhost:5000/api/ticket/${id}/close`,{
+      method:"PUT",
+      headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+token }
+    });
+    loadTickets();
+  }catch(err){ showNotification("خطأ: "+err.message); }
 }
 
-// إشعارات Socket.io
-socket.on("ticketAdded", (ticket) => {
-  addTicketToTable(ticket);
-  notificationSound.play();
-  alert(`طلب جديد تم إضافته:\nالعنوان: ${ticket.title}\nالقسم: ${ticket.department}`);
+form.addEventListener("submit",async e=>{
+  e.preventDefault();
+  const data={ title:document.getElementById("title").value, description:document.getElementById("description").value, department:document.getElementById("department").value, priority:document.getElementById("priority").value, createdBy:document.getElementById("createdBy").value, location:document.getElementById("location").value };
+  try{
+    const res=await fetch("http://localhost:5000/api/ticket",{ method:"POST", headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+token }, body:JSON.stringify(data) });
+    if(!res.ok) throw new Error("فشل إرسال الطلب");
+    const ticket=await res.json(); addTicketToTable(ticket); form.reset(); refreshStats();
+  }catch(err){ showNotification("خطأ: "+err.message); }
 });
 
-socket.on("ticketUpdated", (ticket) => {
-  updateTicketInTable(ticket);
-  notificationSound.play();
-  alert(`تم تحديث طلب:\nالعنوان: ${ticket.title}\nالحالة الجديدة: ${ticket.status}`);
-});
-
-// تحميل الطلبات عند بدء التشغيل
 loadTickets();
 </script>
 </body>
