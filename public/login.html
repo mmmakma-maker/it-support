@@ -1,0 +1,97 @@
+<!-- public/login.html -->
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>Login - IT Support</title>
+  <style>
+    body { font-family: Arial, sans-serif; background:#f0f2f5; display:flex; justify-content:center; align-items:center; height:100vh; }
+    .login-container { background:white; padding:30px; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2); width:300px; }
+    h2 { text-align:center; margin-bottom:20px; }
+    input { width:100%; padding:8px; margin-bottom:12px; border-radius:5px; border:1px solid #ccc; }
+    button { width:100%; padding:10px; background:#007BFF; color:white; border:none; border-radius:5px; cursor:pointer; }
+    button:hover { background:#0056b3; }
+    .toggle-link { margin-top:10px; text-align:center; font-size:14px; color:#007BFF; cursor:pointer; }
+  </style>
+</head>
+<body>
+
+<div class="login-container">
+  <h2>تسجيل الدخول</h2>
+  <form id="loginForm">
+    <input type="text" id="username" placeholder="اسم المستخدم" required>
+    <input type="password" id="password" placeholder="كلمة المرور" required>
+    <button type="submit">دخول</button>
+  </form>
+  <div class="toggle-link" id="showRegister">إنشاء حساب جديد</div>
+
+  <form id="registerForm" style="display:none;">
+    <input type="text" id="regUsername" placeholder="اسم المستخدم" required>
+    <input type="password" id="regPassword" placeholder="كلمة المرور" required>
+    <button type="submit">تسجيل</button>
+    <div class="toggle-link" id="showLogin">رجوع لتسجيل الدخول</div>
+  </form>
+</div>
+
+<script>
+const loginForm = document.getElementById("loginForm");
+const registerForm = document.getElementById("registerForm");
+
+document.getElementById("showRegister").addEventListener("click", ()=>{
+  loginForm.style.display = "none";
+  registerForm.style.display = "block";
+});
+document.getElementById("showLogin").addEventListener("click", ()=>{
+  loginForm.style.display = "block";
+  registerForm.style.display = "none";
+});
+
+// تسجيل الدخول
+loginForm.addEventListener("submit", async (e)=>{
+  e.preventDefault();
+  const username = document.getElementById("username").value;
+  const password = document.getElementById("password").value;
+
+  try {
+    const res = await fetch("/api/auth/login", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if(res.ok){
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", data.user);
+      window.location.href = "/dashboard.html";
+    }else{
+      alert(data.error || "خطأ في تسجيل الدخول");
+    }
+  }catch(err){ alert(err.message); }
+});
+
+// إنشاء حساب جديد
+registerForm.addEventListener("submit", async (e)=>{
+  e.preventDefault();
+  const username = document.getElementById("regUsername").value;
+  const password = document.getElementById("regPassword").value;
+
+  try{
+    const res = await fetch("/api/auth/register", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if(res.ok){
+      alert("تم إنشاء الحساب بنجاح! يمكنك تسجيل الدخول الآن.");
+      registerForm.style.display = "none";
+      loginForm.style.display = "block";
+    }else{
+      alert(data.error || "خطأ في إنشاء الحساب");
+    }
+  }catch(err){ alert(err.message); }
+});
+</script>
+
+</body>
+</html>
