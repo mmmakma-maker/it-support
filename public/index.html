@@ -1,88 +1,68 @@
+<!-- نسخة محسنة على النسخة الأصلية -->
 <!DOCTYPE html>
-<html>
+<html lang="ar">
 <head>
-  <title>IT Support Dashboard</title>
-  <link rel="manifest" href="/manifest.json">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="/socket.io/socket.io.js"></script>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 20px; background:#f9f9f9; }
-    #logoutBtn { float:right; background:red; color:white; padding:8px; border:none; cursor:pointer; border-radius:4px; }
-    h1 { margin-bottom:10px; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لوحة تحكم دعم IT - متجاوبة</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; margin:0; background: #f0f2f5; }
+  header { background:#007BFF; color:white; padding:15px 20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;}
+  header h1 { margin:0; font-size:1.3em; }
+  #logoutBtn, #showEmployeeStats { border:none; padding:8px 12px; border-radius:5px; cursor:pointer; font-weight:bold; }
+  #logoutBtn { background:red; color:white; }
+  #showEmployeeStats { background:#28a745; color:white; margin-left:10px; }
 
-    #stats { display:flex; gap:20px; margin-bottom:20px; }
-    .stat-card { flex:1; padding:15px; border-radius:8px; text-align:center; color:white; font-weight:bold; box-shadow:0 2px 5px rgba(0,0,0,0.1); }
-    .total { background:#007BFF; }
-    .assigned { background:#28a745; }
-    .open { background:#ffc107; color:black; }
+  main { display:flex; flex-wrap:wrap; gap:20px; padding:20px; box-sizing:border-box; }
 
-    table { border-collapse: collapse; width: 100%; background:white; border-radius:8px; overflow:hidden; margin-top:10px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    th { background-color: #f4f4f4; }
-    button { margin-right: 5px; padding: 5px 10px; cursor: pointer; border:none; border-radius:4px; }
-    .status-open { background-color: #fff8c4; }
-    .status-in_progress { background-color: #c4e0ff; }
-    .status-closed { background-color: #c4ffc4; }
+  .sidebar-form { flex:1 1 300px; background:white; padding:20px; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.1); min-width:280px; }
+  .sidebar-form h2 { text-align:center; margin-bottom:15px; }
+  .sidebar-form label { font-weight:bold; margin-top:8px; display:block; }
+  .sidebar-form input, .sidebar-form textarea, .sidebar-form select, .sidebar-form button { width:100%; padding:10px; margin-top:5px; border-radius:6px; border:1px solid #ccc; font-size:1em; box-sizing:border-box; }
+  .sidebar-form button { background:#007BFF; color:white; margin-top:10px; cursor:pointer; transition:0.2s; }
+  .sidebar-form button:hover { background:#0056b3; }
 
-    input, textarea, select { width:100%; padding:6px; margin-bottom:8px; font-size:14px; border-radius:4px; border:1px solid #ccc; }
+  #stats { display:flex; flex-wrap:wrap; gap:15px; margin-bottom:15px; }
+  .stat-card { flex:1 1 100px; padding:15px; border-radius:8px; color:white; font-weight:bold; text-align:center; box-shadow:0 2px 5px rgba(0,0,0,0.1); }
+  .total { background:#007BFF; }
+  .assigned { background:#28a745; }
+  .open { background:#ffc107; color:black; }
 
-    .sidebar-form { flex: 0 0 300px; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; font-size: 14px; }
-    .sidebar-form h2 { text-align: center; margin-bottom: 15px; color: #333; font-size: 18px; }
-    .sidebar-form label { font-weight: bold; color: #555; }
-    .sidebar-form input, .sidebar-form textarea, .sidebar-form select { width: 100%; padding: 8px; font-size: 14px; border-radius: 5px; border:1px solid #ccc; transition: 0.2s; }
-    .sidebar-form input:focus, .sidebar-form textarea:focus, .sidebar-form select:focus { border-color: #007BFF; box-shadow: 0 0 5px rgba(0,123,255,0.3); outline: none; }
-    .sidebar-form textarea { resize: vertical; min-height: 60px; }
-    .sidebar-form button { width: 100%; padding: 10px; font-size: 15px; border-radius: 6px; background:#007BFF; color:white; border:none; cursor:pointer; font-weight:bold; transition: 0.2s; }
-    .sidebar-form button:hover { background:#0056b3; }
+  table { width:100%; border-collapse:collapse; background:white; border-radius:10px; overflow:hidden; margin-top:10px; }
+  th, td { padding:8px; text-align:left; border:1px solid #ddd; font-size:0.9em; }
+  th { background:#f4f4f4; }
+  button.table-btn { padding:5px 8px; font-size:0.85em; }
 
-    .chart-container { height:250px; width:100%; margin-bottom:20px; }
+  .chart-container { width:100%; height:220px; margin-top:15px; }
 
-    #employeeStats { margin-top:20px; }
-    #employeeStats table { width:100%; }
-    #employeeStats th, #employeeStats td { text-align:center; }
+  #notifications { position:fixed; top:20px; right:20px; z-index:999; }
+  .notification { background:#007BFF; color:white; padding:10px 15px; margin-bottom:10px; border-radius:6px; }
 
-    #notifications{ position:fixed; top:20px; right:20px; z-index:999; }
-    .notification{ background:#007BFF; color:white; padding:10px; margin-bottom:10px; border-radius:6px; }
+  #filters { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:10px; }
+  #filters input, #filters select { padding:6px 10px; border-radius:5px; border:1px solid #ccc; font-size:0.9em; }
 
-    #filters { margin-bottom:15px; display:flex; gap:10px; align-items:center; }
-    #filters input, #filters select { width:auto; }
-  </style>
+  #employeeModal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); justify-content:center; align-items:center; z-index:1000; }
+  #employeeModal div { background:white; padding:20px; border-radius:10px; width:95%; max-width:800px; max-height:90%; overflow:auto; }
+  #employeeModal table { width:100%; border-collapse:collapse; margin-top:15px; }
+  #employeeModal th, #employeeModal td { padding:8px; text-align:center; border:1px solid #ddd; font-size:0.9em; }
+
+  @media(max-width:768px){ main { flex-direction:column; } .sidebar-form { order:2; } #ticketsSection { order:1; } }
+  @media(max-width:480px){ header h1 { font-size:1.1em; } .stat-card { font-size:0.9em; padding:10px; } th, td { font-size:0.8em; padding:6px; } .sidebar-form input, .sidebar-form textarea, .sidebar-form select, .sidebar-form button { font-size:0.9em; padding:8px; } }
+</style>
 </head>
 <body>
-
-<button id="logoutBtn">Logout</button>
-<h1>IT Support Dashboard</h1>
-
-<div style="display:flex; gap:20px;">
-
-  <div class="sidebar-form">
-    <h2>إضافة طلب جديد</h2>
-    <form id="ticketForm">
-      <label>العنوان:</label>
-      <input type="text" id="title" required placeholder="أدخل عنوان الطلب">
-      <label>القسم:</label>
-      <select id="department" required>
-        <option value="support">دعم فني</option>
-        <option value="network">شبكات</option>
-        <option value="development">برمجة</option>
-      </select>
-      <label>الوصف:</label>
-      <textarea id="description" placeholder="صف المشكلة باختصار"></textarea>
-      <label>الموقع:</label>
-      <input type="text" id="location" placeholder="مثال: الطابق الثاني / المكتب A3">
-      <label>الأولوية:</label>
-      <select id="priority">
-        <option value="low">منخفض</option>
-        <option value="medium">متوسط</option>
-        <option value="high">عالي</option>
-      </select>
-      <label>من أضاف الطلب:</label>
-      <input type="text" id="createdBy" readonly>
-      <button type="submit">إرسال الطلب</button>
-    </form>
+<header>
+  <h1>لوحة تحكم دعم IT</h1>
+  <div>
+    <button id="showEmployeeStats">تقييم الموظفين</button>
+    <button id="logoutBtn">تسجيل خروج</button>
   </div>
+</header>
 
-  <div style="flex:1;">
+<main>
+  <div id="ticketsSection" style="flex:2 1 600px;">
     <div id="stats">
       <div class="stat-card total"><h3>إجمالي الطلبات</h3><p id="totalTickets">0</p></div>
       <div class="stat-card assigned"><h3>الطلبات المستلمة</h3><p id="assignedTickets">0</p></div>
@@ -90,8 +70,7 @@
     </div>
 
     <div id="filters">
-      <label>بحث:</label>
-      <input type="text" id="search" placeholder="ابحث بالعنوان أو القسم">
+      <label>بحث:</label><input type="text" id="search" placeholder="ابحث بالعنوان أو القسم">
       <label>فلترة القسم:</label>
       <select id="departmentFilter">
         <option value="">الكل</option>
@@ -103,15 +82,6 @@
 
     <div class="chart-container"><canvas id="ticketChart"></canvas></div>
 
-    <div id="employeeStats">
-      <h3>تقييم الموظفين</h3>
-      <table border="1">
-        <thead><tr><th>الموظف</th><th>القسم</th><th>عدد الطلبات المستلمة</th><th>عدد الطلبات المغلقة</th></tr></thead>
-        <tbody id="employeeTableBody"></tbody>
-      </table>
-      <div class="chart-container"><canvas id="employeeChart"></canvas></div>
-    </div>
-
     <table id="ticketsTable">
       <thead>
         <tr>
@@ -122,11 +92,53 @@
       <tbody></tbody>
     </table>
   </div>
-</div>
+
+  <div class="sidebar-form">
+    <h2>إضافة طلب جديد</h2>
+    <form id="ticketForm">
+      <label>العنوان:</label><input type="text" id="title" required placeholder="أدخل عنوان الطلب">
+      <label>القسم:</label>
+      <select id="department" required>
+        <option value="support">دعم فني</option>
+        <option value="network">شبكات</option>
+        <option value="development">برمجة</option>
+      </select>
+      <label>الوصف:</label><textarea id="description" placeholder="صف المشكلة باختصار"></textarea>
+      <label>الموقع:</label><input type="text" id="location" placeholder="مثال: الطابق الثاني / المكتب A3">
+      <label>الأولوية:</label>
+      <select id="priority">
+        <option value="low">منخفض</option>
+        <option value="medium">متوسط</option>
+        <option value="high">عالي</option>
+      </select>
+      <label>من أضاف الطلب:</label><input type="text" id="createdBy" readonly>
+      <button type="submit">إرسال الطلب</button>
+    </form>
+  </div>
+</main>
 
 <div id="notifications"></div>
 
+<div id="employeeModal">
+  <div>
+    <h2 style="text-align:center;">تقييم الموظفين</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>الموظف</th><th>القسم</th><th>عدد الطلبات هذا الشهر</th>
+          <th>عدد الطلبات المغلقة هذا الشهر</th><th>رسم بياني</th>
+        </tr>
+      </thead>
+      <tbody id="employeeTableBody"></tbody>
+    </table>
+    <div style="text-align:center; margin-top:15px;">
+      <button id="closeEmployeeModal" style="padding:8px 15px; border:none; background:#007BFF; color:white; border-radius:5px; cursor:pointer;">إغلاق</button>
+    </div>
+  </div>
+</div>
+
 <script>
+// --- نفس الأكواد السابقة للطلبات والبحث والفلترة ---
 const employees = [
   { name:'أحمد', dept:'network' }, { name:'منذر', dept:'network' },
   { name:'حارث', dept:'support' }, { name:'مبارك', dept:'support' }, { name:'شروق', dept:'support' },
@@ -138,9 +150,12 @@ const employees = [
 const token = localStorage.getItem("token");
 const userName = localStorage.getItem("user");
 if(!token) window.location.href="/login.html";
-document.getElementById("createdBy").value=userName||"";
 
-document.getElementById("logoutBtn").addEventListener("click",()=>{
+const form = document.getElementById("ticketForm");
+const createdByInput = document.getElementById("createdBy");
+createdByInput.value = userName || "";
+
+document.getElementById("logoutBtn").addEventListener("click", ()=> {
   localStorage.removeItem("token"); localStorage.removeItem("user");
   window.location.href="/login.html";
 });
@@ -148,13 +163,15 @@ document.getElementById("logoutBtn").addEventListener("click",()=>{
 const socket = io("http://localhost:5000"); 
 const notificationSound = new Audio("/sounds/ping.mp3");
 function showNotification(msg){
-  const div=document.createElement("div"); div.className="notification"; div.textContent=msg;
+  const div=document.createElement("div");
+  div.className="notification"; 
+  div.textContent=msg;
   document.getElementById("notifications").appendChild(div);
   setTimeout(()=>div.remove(),4000);
 }
 
-socket.on("ticketAdded",(ticket)=>{ addTicketToTable(ticket); notificationSound.play(); showNotification(`طلب جديد: ${ticket.title}`); refreshStats(); });
-socket.on("ticketUpdated",(ticket)=>{ updateTicketInTable(ticket); notificationSound.play(); showNotification(`تم تحديث طلب: ${ticket.title}`); refreshStats(); });
+socket.on("ticketAdded", ticket=>{ addTicketToTable(ticket); notificationSound.play(); refreshStats(); });
+socket.on("ticketUpdated", ticket=>{ updateTicketInTable(ticket); notificationSound.play(); refreshStats(); });
 
 const ticketsTableBody = document.querySelector("#ticketsTable tbody");
 const searchInput = document.getElementById("search");
@@ -185,7 +202,9 @@ async function loadTickets(){
 }
 
 function addTicketToTable(ticket){
-  const tr=document.createElement("tr"); tr.id=ticket._id; tr.className="status-"+ticket.status;
+  const tr=document.createElement("tr"); 
+  tr.id=ticket._id; 
+  tr.className="status-"+ticket.status;
   tr.innerHTML=`<td>${ticket.title}</td>
   <td>${ticket.department}</td>
   <td>${ticket.description||""}</td>
@@ -196,8 +215,8 @@ function addTicketToTable(ticket){
   <td>${ticket.status}</td>
   <td>${ticket.assignedTo||""}</td>
   <td>
-    ${ticket.status==="open"?`<button onclick="assignTicket('${ticket._id}')">استلام الطلب</button>`:""}
-    ${ticket.status!=="closed"?`<button onclick="closeTicket('${ticket._id}')">إغلاق الطلب</button>`:""}
+    ${ticket.status==="open"?`<button class="table-btn" onclick="assignTicket('${ticket._id}')">استلام الطلب</button>`:""}
+    ${ticket.status!=="closed"?`<button class="table-btn" onclick="closeTicket('${ticket._id}')">إغلاق الطلب</button>`:""}
   </td>`;
   ticketsTableBody.appendChild(tr);
 }
@@ -205,68 +224,32 @@ function addTicketToTable(ticket){
 function updateTicketInTable(ticket){
   const tr=document.getElementById(ticket._id); if(!tr) return;
   tr.className="status-"+ticket.status;
-  tr.children[0].textContent=ticket.title; tr.children[1].textContent=ticket.department;
-  tr.children[2].textContent=ticket.description||""; tr.children[3].textContent=ticket.createdBy||"";
-  tr.children[4].textContent=ticket.location||""; tr.children[5].textContent=ticket.priority||"";
+  tr.children[0].textContent=ticket.title;
+  tr.children[1].textContent=ticket.department;
+  tr.children[2].textContent=ticket.description||"";
+  tr.children[3].textContent=ticket.createdBy||"";
+  tr.children[4].textContent=ticket.location||"";
+  tr.children[5].textContent=ticket.priority||"";
   tr.children[6].textContent=ticket.createdAt?new Date(ticket.createdAt).toLocaleString():"";
-  tr.children[7].textContent=ticket.status; tr.children[8].textContent=ticket.assignedTo||"";
+  tr.children[7].textContent=ticket.status;
+  tr.children[8].textContent=ticket.assignedTo||"";
 }
 
 function refreshStats(){
   const tickets=Array.from(ticketsTableBody.children).map(tr=>({
     assignedTo: tr.children[8].textContent,
-    status: tr.children[7].textContent,
-    department: tr.children[1].textContent
+    status: tr.children[7].textContent
   }));
-  updateStats(tickets); renderChart(tickets); updateEmployeeStats(tickets);
-}
-
-function updateStats(tickets){
   document.getElementById("totalTickets").textContent=tickets.length;
   document.getElementById("assignedTickets").textContent=tickets.filter(t=>t.assignedTo).length;
   document.getElementById("openTickets").textContent=tickets.filter(t=>t.status==="open").length;
 }
 
-let ticketChart;
-function renderChart(tickets){
-  const ctx=document.getElementById('ticketChart').getContext('2d');
-  const statusCounts={
-    open: tickets.filter(t=>t.status==='open').length,
-    in_progress: tickets.filter(t=>t.status==='in_progress').length,
-    closed: tickets.filter(t=>t.status==='closed').length
-  };
-  if(ticketChart) ticketChart.destroy();
-  ticketChart=new Chart(ctx,{
-    type:'pie',
-    data:{ labels:['مفتوحة','قيد التنفيذ','مغلقة'], datasets:[{ data:[statusCounts.open,statusCounts.in_progress,statusCounts.closed], backgroundColor:['#ffc107','#c4e0ff','#28a745'] }] },
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
-  });
-}
-
-let employeeChart;
-function updateEmployeeStats(tickets){
-  const tableBody=document.getElementById("employeeTableBody"); tableBody.innerHTML="";
-  const dataMap=employees.map(emp=>{
-    const empTickets=tickets.filter(t=>t.assignedTo===emp.name);
-    return {...emp, received:empTickets.length, closed:empTickets.filter(t=>t.status==='closed').length};
-  });
-  dataMap.forEach(emp=>{
-    const tr=document.createElement("tr");
-    tr.innerHTML=`<td>${emp.name}</td><td>${emp.dept}</td><td>${emp.received}</td><td>${emp.closed}</td>`;
-    tableBody.appendChild(tr);
-  });
-  const ctx=document.getElementById('employeeChart').getContext('2d');
-  if(employeeChart) employeeChart.destroy();
-  employeeChart=new Chart(ctx,{ type:'bar', data:{ labels:dataMap.map(e=>e.name), datasets:[{ label:'الطلبات المغلقة', data:dataMap.map(e=>e.closed), backgroundColor:dataMap.map(e=>{ if(e.dept==='network') return '#007BFF'; if(e.dept==='support') return '#28a745'; return '#ffc107'; }) }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} } });
-}
-
 async function assignTicket(id){
-  const name=prompt("ادخل اسمك لاستلام الطلب:"); if(!name) return;
   try{
     await fetch(`http://localhost:5000/api/ticket/${id}/assign`,{
       method:"PUT",
-      headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+token },
-      body: JSON.stringify({ assignedTo:name })
+      headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+token }
     });
     loadTickets();
   }catch(err){ showNotification("خطأ: "+err.message); }
@@ -282,15 +265,90 @@ async function closeTicket(id){
   }catch(err){ showNotification("خطأ: "+err.message); }
 }
 
-form.addEventListener("submit",async e=>{
+form.addEventListener("submit", async e=>{
   e.preventDefault();
-  const data={ title:document.getElementById("title").value, description:document.getElementById("description").value, department:document.getElementById("department").value, priority:document.getElementById("priority").value, createdBy:document.getElementById("createdBy").value, location:document.getElementById("location").value };
+  const data={
+    title: document.getElementById("title").value,
+    description: document.getElementById("description").value,
+    department: document.getElementById("department").value,
+    priority: document.getElementById("priority").value,
+    location: document.getElementById("location").value,
+    createdBy: createdByInput.value
+  };
   try{
-    const res=await fetch("http://localhost:5000/api/ticket",{ method:"POST", headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+token }, body:JSON.stringify(data) });
-    if(!res.ok) throw new Error("فشل إرسال الطلب");
-    const ticket=await res.json(); addTicketToTable(ticket); form.reset(); refreshStats();
+    const res = await fetch("http://localhost:5000/api/ticket",{
+      method:"POST",
+      headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+token },
+      body: JSON.stringify(data)
+    });
+    const ticket=await res.json();
+    addTicketToTable(ticket);
+    form.reset();
+    createdByInput.value = userName || "";
+    refreshStats();
   }catch(err){ showNotification("خطأ: "+err.message); }
 });
+
+// ===== Employee Modal مع رسم بياني لكل موظف =====
+const showEmployeeStatsBtn = document.getElementById("showEmployeeStats");
+const employeeModal = document.getElementById("employeeModal");
+const closeEmployeeModalBtn = document.getElementById("closeEmployeeModal");
+const employeeTableBody = document.getElementById("employeeTableBody");
+
+showEmployeeStatsBtn.addEventListener("click", ()=>{
+  updateEmployeeStats();
+  employeeModal.style.display="flex";
+});
+closeEmployeeModalBtn.addEventListener("click", ()=> employeeModal.style.display="none");
+
+function updateEmployeeStats(){
+  const tickets = Array.from(ticketsTableBody.children).map(tr => ({
+    assignedTo: tr.children[8].textContent,
+    status: tr.children[7].textContent,
+    createdAt: tr.children[6].textContent ? new Date(tr.children[6].textContent) : null,
+    department: tr.children[1].textContent
+  }));
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+
+  employeeTableBody.innerHTML = "";
+  employees.forEach(emp=>{
+    const empTickets = tickets.filter(t => t.assignedTo === emp.name);
+    const empTicketsThisMonth = empTickets.filter(t => t.createdAt && t.createdAt.getMonth() === currentMonth && t.createdAt.getFullYear() === currentYear);
+    const empClosedThisMonth = empTicketsThisMonth.filter(t => t.status==='closed');
+
+    const tr = document.createElement("tr");
+    let color = '';
+    if(empClosedThisMonth.length >= 5) color = 'background:#c4ffc4';
+    else if(empClosedThisMonth.length >= 2) color = 'background:#fff8c4';
+    else color = 'background:#ffc4c4';
+
+    tr.setAttribute("style", color);
+
+    const canvasId = "chart-"+emp.name.replace(/\s+/g,'');
+    tr.innerHTML = `<td>${emp.name}</td>
+                    <td>${emp.dept}</td>
+                    <td>${empTicketsThisMonth.length}</td>
+                    <td>${empClosedThisMonth.length}</td>
+                    <td><canvas id="${canvasId}" style="height:50px;"></canvas></td>`;
+    employeeTableBody.appendChild(tr);
+
+    // رسم بياني صغير
+    new Chart(document.getElementById(canvasId), {
+      type:'bar',
+      data:{
+        labels:['مغلق','مستلم'],
+        datasets:[{
+          label:'عدد الطلبات',
+          data:[empClosedThisMonth.length, empTicketsThisMonth.length],
+          backgroundColor:['#28a745','#007bff']
+        }]
+      },
+      options:{ indexAxis:'y', plugins:{ legend:{ display:false } }, scales:{ x:{ beginAtZero:true }, y:{ beginAtZero:true } } }
+    });
+  });
+}
 
 loadTickets();
 </script>
