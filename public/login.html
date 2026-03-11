@@ -1,32 +1,102 @@
-<!-- public/login.html -->
 <!DOCTYPE html>
 <html lang="ar">
 <head>
-  <meta charset="UTF-8">
-  <title>Login - IT Support</title>
-  <style>
-    body { font-family: Arial, sans-serif; background:#f0f2f5; display:flex; justify-content:center; align-items:center; height:100vh; }
-    .login-container { background:white; padding:30px; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2); width:300px; }
-    h2 { text-align:center; margin-bottom:20px; }
-    input { width:100%; padding:8px; margin-bottom:12px; border-radius:5px; border:1px solid #ccc; }
-    button { width:100%; padding:10px; background:#007BFF; color:white; border:none; border-radius:5px; cursor:pointer; }
-    button:hover { background:#0056b3; }
-    .toggle-link { margin-top:10px; text-align:center; font-size:14px; color:#007BFF; cursor:pointer; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>تسجيل الدخول - IT Support</title>
+<style>
+  /* Body */
+  body {
+    font-family: Arial, sans-serif;
+    background: #f0f2f5;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+  }
+
+  /* Container */
+  .login-container {
+    background: white;
+    padding: 25px 30px;
+    border-radius: 12px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.2);
+    width: 90%;
+    max-width: 400px;
+    box-sizing: border-box;
+  }
+
+  /* Heading */
+  h2 {
+    text-align: center;
+    margin-bottom: 25px;
+    font-size: 1.6em;
+    color: #333;
+  }
+
+  /* Inputs */
+  input {
+    width: 100%;
+    padding: 14px;
+    margin-bottom: 15px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    font-size: 1em;
+    box-sizing: border-box;
+  }
+
+  /* Button */
+  button {
+    width: 100%;
+    padding: 14px;
+    background: #007BFF;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1em;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+
+  button:hover {
+    background: #0056b3;
+  }
+
+  /* Toggle links */
+  .toggle-link {
+    margin-top: 12px;
+    text-align: center;
+    font-size: 0.95em;
+    color: #007BFF;
+    cursor: pointer;
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 360px) {
+    h2 { font-size: 1.4em; }
+    input, button { padding: 12px; font-size: 0.95em; }
+  }
+</style>
 </head>
 <body>
 
 <div class="login-container">
   <h2>تسجيل الدخول</h2>
+
+  <!-- Login Form -->
   <form id="loginForm">
-    <input type="text" id="username" placeholder="اسم المستخدم" required>
+    <input type="email" id="email" placeholder="البريد الإلكتروني" required>
     <input type="password" id="password" placeholder="كلمة المرور" required>
     <button type="submit">دخول</button>
   </form>
+
   <div class="toggle-link" id="showRegister">إنشاء حساب جديد</div>
 
+  <!-- Register Form (اختياري) -->
   <form id="registerForm" style="display:none;">
-    <input type="text" id="regUsername" placeholder="اسم المستخدم" required>
+    <input type="text" id="regName" placeholder="الاسم" required>
+    <input type="email" id="regEmail" placeholder="البريد الإلكتروني" required>
     <input type="password" id="regPassword" placeholder="كلمة المرور" required>
     <button type="submit">تسجيل</button>
     <div class="toggle-link" id="showLogin">رجوع لتسجيل الدخول</div>
@@ -46,50 +116,34 @@ document.getElementById("showLogin").addEventListener("click", ()=>{
   registerForm.style.display = "none";
 });
 
-// تسجيل الدخول
+// LOGIN
 loginForm.addEventListener("submit", async (e)=>{
   e.preventDefault();
-  const username = document.getElementById("username").value;
+  const email = document.getElementById("email").value;
   const password = document.getElementById("password").value;
-
   try {
     const res = await fetch("/api/auth/login", {
       method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ username, password })
+      headers: { "Content-Type":"application/json" },
+      body: JSON.stringify({ email, password })
     });
     const data = await res.json();
     if(res.ok){
       localStorage.setItem("token", data.token);
-      localStorage.setItem("user", data.user);
-      window.location.href = "/dashboard.html";
-    }else{
-      alert(data.error || "خطأ في تسجيل الدخول");
+      localStorage.setItem("user", data.user.name);
+      window.location.href = "/index.html";
+    } else {
+      alert(data.message || "خطأ في تسجيل الدخول");
     }
-  }catch(err){ alert(err.message); }
+  } catch(err){
+    alert(err.message);
+  }
 });
 
-// إنشاء حساب جديد
+// REGISTER (اختياري)
 registerForm.addEventListener("submit", async (e)=>{
   e.preventDefault();
-  const username = document.getElementById("regUsername").value;
-  const password = document.getElementById("regPassword").value;
-
-  try{
-    const res = await fetch("/api/auth/register", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ username, password })
-    });
-    const data = await res.json();
-    if(res.ok){
-      alert("تم إنشاء الحساب بنجاح! يمكنك تسجيل الدخول الآن.");
-      registerForm.style.display = "none";
-      loginForm.style.display = "block";
-    }else{
-      alert(data.error || "خطأ في إنشاء الحساب");
-    }
-  }catch(err){ alert(err.message); }
+  alert("التسجيل مغلق، استخدم حساب Admin فقط");
 });
 </script>
 
