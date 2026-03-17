@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Ticket = require("../models/Ticket");
+const auth = require("../middleware/auth");
 
 // إنشاء طلب جديد
 router.post("/ticket", async (req, res) => {

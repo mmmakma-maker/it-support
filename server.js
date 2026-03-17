@@ -2,14 +2,20 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+<<<<<<< Updated upstream
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const http = require("http");
+=======
+const ticketRoutes = require("./routes/ticketRoutes");
+const authRoutes = require("./routes/authRoutes");
+>>>>>>> Stashed changes
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
+app.use("/api/auth", authRoutes);
 
 // Socket.io
 const server = http.createServer(app);

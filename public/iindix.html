@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<title>IT Support Dashboard</title>
+
+<script>
+
+const token = localStorage.getItem("token");
+
+if(!token){
+window.location.href="/login.html";
+}
+
+</script>
+
+<link rel="manifest" href="/manifest.json">
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<style>
+
+body{
+background:#f5f7fb;
+}
+
+.card-stat{
+border:none;
+border-radius:10px;
+color:white;
+}
+
+.stat-open{background:#f0ad4e;}
+.stat-progress{background:#5bc0de;}
+.stat-closed{background:#5cb85c;}
+
+table{
+background:white;
+}
+
+</style>
+
+</head>
+
+<body>
+
+
+<button onclick="logout()" style="float:right;background:red;color:white;padding:8px;border:none;">
+Logout
+</button>
+
+
+<div class="container mt-4">
+
+<h2 class="mb-4">💻 IT Support System</h2>
+
+<div class="row mb-4">
+
+<div class="col-md-4">
+<div class="card card-stat stat-open p-3">
+<h5>Open Tickets</h5>
+<h2 id="openCount">0</h2>
+</div>
+</div>
+
+<div class="col-md-4">
+<div class="card card-stat stat-progress p-3">
+<h5>In Progress</h5>
+<h2 id="progressCount">0</h2>
+</div>
+</div>
+
+<div class="col-md-4">
+<div class="card card-stat stat-closed p-3">
+<h5>Closed</h5>
+<h2 id="closedCount">0</h2>
+</div>
+</div>
+
+</div>
+
+<div class="card mb-4">
+
+<div class="card-header">
+إضافة طلب دعم
+</div>
+
+<div class="card-body">
+
+<form id="ticketForm">
+
+<div class="row">
+
+<div class="col-md-6 mb-3">
+<label>العنوان</label>
+<input class="form-control" id="title" required>
+</div>
+
+<div class="col-md-6 mb-3">
+<label>القسم</label>
+<select class="form-control" id="department">
+<option value="support">Support</option>
+<option value="network">Network</option>
+<option value="development">Development</option>
+</select>
+</div>
+
+</div>
+
+<div class="mb-3">
+<label>الوصف</label>
+<textarea class="form-control" id="description"></textarea>
+</div>
+
+<div class="row">
+
+<div class="col-md-6 mb-3">
+<label>من أضاف الطلب</label>
+<input class="form-control" id="createdBy">
+</div>
+
+<div class="col-md-6 mb-3">
+<label>الموقع</label>
+<input class="form-control" id="location">
+</div>
+
+</div>
+
+<button class="btn btn-primary">إرسال الطلب</button>
+
+</form>
+
+</div>
+</div>
+
+<div class="card">
+
+<div class="card-header">
+
+<div class="row">
+
+<div class="col-md-6">
+<h5>قائمة الطلبات</h5>
+</div>
+
+<div class="col-md-6">
+<input class="form-control" id="search" placeholder="بحث...">
+</div>
+
+</div>
+
+</div>
+
+<div class="card-body p-0">
+
+<table class="table table-hover mb-0" id="ticketsTable">
+
+<thead class="table-light">
+
+<tr>
+<th>العنوان</th>
+<th>القسم</th>
+<th>الوصف</th>
+<th>المستخدم</th>
+<th>الموقع</th>
+<th>الحالة</th>
+<th>المسؤول</th>
+<th>إجراءات</th>
+</tr>
+
+</thead>
+
+<tbody></tbody>
+
+</table>
+
+</div>
+</div>
+
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+
+<script>
+
+const socket = io();
+
+const form = document.getElementById("ticketForm");
+
+const ticketsTableBody = document.querySelector("#ticketsTable tbody");
+
+const searchInput = document.getElementById("search");
+
+let tickets=[];
+
+function statusBadge(status){
+
+if(status==="open") return `<span class="badge bg-warning">Open</span>`;
+
+if(status==="in_progress") return `<span class="badge bg-info">In Progress</span>`;
+
+if(status==="closed") return `<span class="badge bg-success">Closed</span>`;
+}
+
+function updateStats(){
+
+let open=0,progress=0,closed=0;
+
+tickets.forEach(t=>{
+
+if(t.status==="open") open++;
+if(t.status==="in_progress") progress++;
+if(t.status==="closed") closed++;
+
+});
+
+document.getElementById("openCount").innerText=open;
+document.getElementById("progressCount").innerText=progress;
+document.getElementById("closedCount").innerText=closed;
+
+}
+
+function addTicketToTable(ticket){
+
+tickets.push(ticket);
+
+const tr=document.createElement("tr");
+
+tr.id=ticket._id;
+
+tr.innerHTML=`
+
+<td>${ticket.title}</td>
+<td>${ticket.department}</td>
+<td>${ticket.description||""}</td>
+<td>${ticket.createdBy||""}</td>
+<td>${ticket.location||""}</td>
+<td>${statusBadge(ticket.status)}</td>
+<td>${ticket.assignedTo||""}</td>
+
+<td>
+
+${ticket.status==="open"?
+`<button class="btn btn-sm btn-primary" onclick="assignTicket('${ticket._id}')">استلام</button>`:""}
+
+${ticket.status!=="closed"?
+`<button class="btn btn-sm btn-danger" onclick="closeTicket('${ticket._id}')">إغلاق</button>`:""}
+
+</td>
+
+`;
+
+ticketsTableBody.prepend(tr);
+
+updateStats();
+
+}
+
+async function loadTickets(){
+
+const res=await fetch("/api/tickets",{
+
+headers:{
+Authorization: localStorage.getItem("token")
+}
+
+})
+
+tickets=await res.json();
+
+ticketsTableBody.innerHTML="";
+
+tickets.forEach(addTicketToTable);
+
+}
+
+form.addEventListener("submit",async(e)=>{
+
+e.preventDefault();
+
+const data={
+
+title:title.value,
+description:description.value,
+department:department.value,
+createdBy:createdBy.value,
+location:location.value
+
+};
+
+const res=await fetch("/api/ticket",{
+
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify(data)
+
+});
+
+form.reset();
+
+});
+
+async function assignTicket(id){
+
+const name=prompt("ادخل اسمك");
+
+if(!name) return;
+
+await fetch(`/api/ticket/${id}/assign`,{
+
+method:"PUT",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({assignedTo:name})
+
+});
+
+}
+
+async function closeTicket(id){
+
+await fetch(`/api/ticket/${id}/close`,{method:"PUT"});
+
+}
+
+socket.on("ticketAdded",(ticket)=>{
+
+addTicketToTable(ticket);
+
+Swal.fire({
+
+icon:"info",
+title:"طلب جديد",
+text:ticket.title,
+timer:2000,
+showConfirmButton:false
+
+});
+
+});
+
+socket.on("ticketUpdated",(ticket)=>{
+
+const tr=document.getElementById(ticket._id);
+
+if(!tr) return;
+
+tr.children[5].innerHTML=statusBadge(ticket.status);
+
+tr.children[6].innerText=ticket.assignedTo||"";
+
+updateStats();
+
+});
+
+searchInput.addEventListener("input",()=>{
+
+const term=searchInput.value.toLowerCase();
+
+document.querySelectorAll("#ticketsTable tbody tr").forEach(tr=>{
+
+const title=tr.children[0].innerText.toLowerCase();
+
+const dep=tr.children[1].innerText.toLowerCase();
+
+tr.style.display=(title.includes(term)||dep.includes(term))?"":"none";
+
+});
+
+});
+
+loadTickets();
+
+<script>
+
+function logout(){
+
+localStorage.removeItem("token");
+localStorage.removeItem("user");
+
+window.location.href="/login.html";
+
+}
+
+</script>
+
+</body>
+</html>
