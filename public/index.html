@@ -1,204 +1,355 @@
 <!DOCTYPE html>
-<html>
+<html lang="ar">
 <head>
-  <title>IT Support Ticket System</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لوحة تحكم دعم IT - متجاوبة</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; margin:0; background: #f0f2f5; }
+  header { background:#007BFF; color:white; padding:15px 20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;}
+  header h1 { margin:0; font-size:1.3em; }
+  #logoutBtn, #showEmployeeStats { border:none; padding:8px 12px; border-radius:5px; cursor:pointer; font-weight:bold; }
+  #logoutBtn { background:red; color:white; }
+  #showEmployeeStats { background:#28a745; color:white; margin-left:10px; }
 
-<link rel="manifest" href="/manifest.json">
+  main { display:flex; flex-wrap:wrap; gap:20px; padding:20px; box-sizing:border-box; }
 
-  <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-    th { background-color: #f4f4f4; }
-    button { margin-right: 5px; padding: 5px 10px; cursor: pointer; }
-    .status-open { background-color: #fff8c4; }
-    .status-in_progress { background-color: #c4e0ff; }
-    .status-closed { background-color: #c4ffc4; }
-  </style>
+  .sidebar-form { flex:1 1 300px; background:white; padding:20px; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.1); min-width:280px; }
+  .sidebar-form h2 { text-align:center; margin-bottom:15px; }
+  .sidebar-form label { font-weight:bold; margin-top:8px; display:block; }
+  .sidebar-form input, .sidebar-form textarea, .sidebar-form select, .sidebar-form button { width:100%; padding:10px; margin-top:5px; border-radius:6px; border:1px solid #ccc; font-size:1em; box-sizing:border-box; }
+  .sidebar-form button { background:#007BFF; color:white; margin-top:10px; cursor:pointer; transition:0.2s; }
+  .sidebar-form button:hover { background:#0056b3; }
+
+  #stats { display:flex; flex-wrap:wrap; gap:15px; margin-bottom:15px; }
+  .stat-card { flex:1 1 100px; padding:15px; border-radius:8px; color:white; font-weight:bold; text-align:center; box-shadow:0 2px 5px rgba(0,0,0,0.1); }
+  .total { background:#007BFF; }
+  .assigned { background:#28a745; }
+  .open { background:#ffc107; color:black; }
+
+  table { width:100%; border-collapse:collapse; background:white; border-radius:10px; overflow:hidden; margin-top:10px; }
+  th, td { padding:8px; text-align:left; border:1px solid #ddd; font-size:0.9em; }
+  th { background:#f4f4f4; }
+  button.table-btn { padding:5px 8px; font-size:0.85em; }
+
+  .chart-container { width:100%; height:220px; margin-top:15px; }
+
+  #notifications { position:fixed; top:20px; right:20px; z-index:999; }
+  .notification { background:#007BFF; color:white; padding:10px 15px; margin-bottom:10px; border-radius:6px; }
+
+  #filters { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:10px; }
+  #filters input, #filters select { padding:6px 10px; border-radius:5px; border:1px solid #ccc; font-size:0.9em; }
+
+  #employeeModal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); justify-content:center; align-items:center; z-index:1000; }
+  #employeeModal div { background:white; padding:20px; border-radius:10px; width:95%; max-width:800px; max-height:90%; overflow:auto; }
+  #employeeModal table { width:100%; border-collapse:collapse; margin-top:15px; }
+  #employeeModal th, #employeeModal td { padding:8px; text-align:center; border:1px solid #ddd; font-size:0.9em; }
+
+  @media(max-width:768px){ main { flex-direction:column; } .sidebar-form { order:2; } #ticketsSection { order:1; } }
+  @media(max-width:480px){ header h1 { font-size:1.1em; } .stat-card { font-size:0.9em; padding:10px; } th, td { font-size:0.8em; padding:6px; } .sidebar-form input, .sidebar-form textarea, .sidebar-form select, .sidebar-form button { font-size:0.9em; padding:8px; } }
+</style>
 </head>
 <body>
+<header>
+  <h1>لوحة تحكم دعم IT</h1>
+  <div>
+    <button id="showEmployeeStats">تقييم الموظفين</button>
+    <button id="logoutBtn">تسجيل خروج</button>
+  </div>
+</header>
 
-<h1>إضافة طلب دعم فني</h1>
-<form id="ticketForm">
-  <label>العنوان:</label><br>
-  <input type="text" id="title" required><br><br>
+<main>
+  <div id="ticketsSection" style="flex:2 1 600px;">
+    <div id="stats">
+      <div class="stat-card total"><h3>إجمالي الطلبات</h3><p id="totalTickets">0</p></div>
+      <div class="stat-card assigned"><h3>الطلبات المستلمة</h3><p id="assignedTickets">0</p></div>
+      <div class="stat-card open"><h3>الطلبات المفتوحة</h3><p id="openTickets">0</p></div>
+    </div>
 
-  <label>الوصف:</label><br>
-  <textarea id="description"></textarea><br><br>
+    <div id="filters">
+      <label>بحث:</label><input type="text" id="search" placeholder="ابحث بالعنوان أو القسم">
+      <label>فلترة القسم:</label>
+      <select id="departmentFilter">
+        <option value="">الكل</option>
+        <option value="support">دعم فني</option>
+        <option value="network">شبكات</option>
+        <option value="development">برمجة</option>
+      </select>
+    </div>
 
-  <label>القسم:</label><br>
-  <select id="department" required>
-    <option value="support">دعم فني</option>
-    <option value="network">شبكات</option>
-    <option value="development">برمجة</option>
-  </select><br><br>
+    <div class="chart-container"><canvas id="ticketChart"></canvas></div>
 
-  <label>من أضاف الطلب:</label><br>
-  <input type="text" id="createdBy"><br><br>
+    <table id="ticketsTable">
+      <thead>
+        <tr>
+          <th>العنوان</th><th>القسم</th><th>الوصف</th><th>من أضاف</th><th>الموقع</th>
+          <th>الأولوية</th><th>وقت الطلب</th><th>الحالة</th><th>المسؤول</th><th>إجراءات</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
 
-  <label>الموقع:</label><br>
-  <input type="text" id="location"><br><br>
+  <div class="sidebar-form">
+    <h2>إضافة طلب جديد</h2>
+    <form id="ticketForm">
+      <label>العنوان:</label><input type="text" id="title" required placeholder="أدخل عنوان الطلب">
+      <label>القسم:</label>
+      <select id="department" required>
+        <option value="support">دعم فني</option>
+        <option value="network">شبكات</option>
+        <option value="development">برمجة</option>
+      </select>
+      <label>الوصف:</label><textarea id="description" placeholder="صف المشكلة باختصار"></textarea>
+      <label>الموقع:</label><input type="text" id="location" placeholder="مثال: الطابق الثاني / المكتب A3">
+      <label>الأولوية:</label>
+      <select id="priority">
+        <option value="low">منخفض</option>
+        <option value="medium">متوسط</option>
+        <option value="high">عالي</option>
+      </select>
+      <label>من أضاف الطلب:</label><input type="text" id="createdBy" readonly>
+      <button type="submit">إرسال الطلب</button>
+    </form>
+  </div>
+</main>
 
-  <button type="submit">إرسال الطلب</button>
-</form>
+<div id="notifications"></div>
 
-<h2>قائمة الطلبات</h2>
-<label>بحث:</label>
-<input type="text" id="search" placeholder="ابحث بالعنوان أو القسم">
+<div id="employeeModal">
+  <div>
+    <h2 style="text-align:center;">تقييم الموظفين</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>الموظف</th><th>القسم</th><th>عدد الطلبات هذا الشهر</th>
+          <th>عدد الطلبات المغلقة هذا الشهر</th><th>رسم بياني</th>
+        </tr>
+      </thead>
+      <tbody id="employeeTableBody"></tbody>
+    </table>
+    <div style="text-align:center; margin-top:15px;">
+      <button id="closeEmployeeModal" style="padding:8px 15px; border:none; background:#007BFF; color:white; border-radius:5px; cursor:pointer;">إغلاق</button>
+    </div>
+  </div>
+</div>
 
-<table id="ticketsTable">
-  <thead>
-    <tr>
-      <th>العنوان</th>
-      <th>القسم</th>
-      <th>الوصف</th>
-      <th>من أضاف</th>
-      <th>الموقع</th>
-      <th>الحالة</th>
-      <th>المسؤول</th>
-      <th>إجراءات</th>
-    </tr>
-  </thead>
-  <tbody></tbody>
-</table>
-
-<script src="/socket.io/socket.io.js"></script>
 <script>
-const socket = io();
+const BASE_URL = "https://your-app.onrender.com";
+// --- نفس الأكواد السابقة للطلبات والبحث والفلترة ---
+const employees = [
+  { name:'أحمد', dept:'network' }, { name:'منذر', dept:'network' },
+  { name:'حارث', dept:'support' }, { name:'مبارك', dept:'support' }, { name:'شروق', dept:'support' },
+  { name:'عائشة', dept:'support' }, { name:'حيدر', dept:'support' },
+  { name:'فاطمة السعدي', dept:'development' }, { name:'سهيل', dept:'development' },
+  { name:'فاطمة البداعي', dept:'development' }, { name:'زاهد', dept:'development' }
+];
+
+const token = localStorage.getItem("token");
+const userName = localStorage.getItem("user");
+if(!token) window.location.href="/login.html";
+
 const form = document.getElementById("ticketForm");
+const createdByInput = document.getElementById("createdBy");
+createdByInput.value = userName || "";
+
+document.getElementById("logoutBtn").addEventListener("click", ()=> {
+  localStorage.removeItem("token"); localStorage.removeItem("user");
+  window.location.href="/login.html";
+});
+
+const socket = io(BASE_URL);
+const notificationSound = new Audio("/sounds/ping.mp3");
+function showNotification(msg){
+  const div=document.createElement("div");
+  div.className="notification"; 
+  div.textContent=msg;
+  document.getElementById("notifications").appendChild(div);
+  setTimeout(()=>div.remove(),4000);
+}
+
+socket.on("ticketAdded", ticket=>{ addTicketToTable(ticket); notificationSound.play(); refreshStats(); });
+socket.on("ticketUpdated", ticket=>{ updateTicketInTable(ticket); notificationSound.play(); refreshStats(); });
+
 const ticketsTableBody = document.querySelector("#ticketsTable tbody");
 const searchInput = document.getElementById("search");
-const notificationSound = new Audio("/sounds/ping.mp3");
+const departmentFilter = document.getElementById("departmentFilter");
 
-// إضافة طلب جديد
-form.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const data = {
-    title: document.getElementById("title").value,
-    description: document.getElementById("description").value,
-    department: document.getElementById("department").value,
-    createdBy: document.getElementById("createdBy").value,
-    location: document.getElementById("location").value
-  };
+searchInput.addEventListener("input", filterTickets);
+departmentFilter.addEventListener("change", filterTickets);
 
-  try {
-    const res = await fetch("/api/ticket", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data)
-    });
-
-    if (!res.ok) throw new Error("فشل إرسال الطلب");
-
-    const ticket = await res.json(); 
-    addTicketToTable(ticket); 
-    form.reset();                   
-  } catch (err) {
-    alert("خطأ: " + err.message);
-  }
-});
-
-// فلترة البحث
-searchInput.addEventListener("input", () => {
-  const term = searchInput.value.toLowerCase();
-  document.querySelectorAll("#ticketsTable tbody tr").forEach(tr => {
-    const title = tr.children[0].textContent.toLowerCase();
-    const department = tr.children[1].textContent.toLowerCase();
-    tr.style.display = (title.includes(term) || department.includes(term)) ? "" : "none";
+function filterTickets(){
+  const term=searchInput.value.toLowerCase();
+  const dept=departmentFilter.value;
+  document.querySelectorAll("#ticketsTable tbody tr").forEach(tr=>{
+    const title=tr.children[0].textContent.toLowerCase();
+    const department=tr.children[1].textContent.toLowerCase();
+    const show=(title.includes(term)||department.includes(term)) && (!dept || department===dept);
+    tr.style.display=show?"":"none";
   });
-});
+}
 
-// إضافة صف جديد
-function addTicketToTable(ticket) {
-  const tr = document.createElement("tr");
-  tr.id = ticket._id;
-  tr.className = "status-" + ticket.status;
-  tr.innerHTML = `
-    <td>${ticket.title}</td>
-    <td>${ticket.department}</td>
-    <td>${ticket.description || ""}</td>
-    <td>${ticket.createdBy || ""}</td>
-    <td>${ticket.location || ""}</td>
-    <td>${ticket.status}</td>
-    <td>${ticket.assignedTo || ""}</td>
-    <td>
-      ${ticket.status === "open" ? `<button onclick="assignTicket('${ticket._id}')">استلام الطلب</button>` : ""}
-      ${ticket.status !== "closed" ? `<button onclick="closeTicket('${ticket._id}')">إغلاق الطلب</button>` : ""}
-    </td>
-  `;
+async function loadTickets(){
+  try{
+    const res=await fetch(`${BASE_URL}/api/tickets`,{ headers:{ "Authorization":"Bearer "+token } });
+    const tickets=await res.json();
+    ticketsTableBody.innerHTML="";
+    tickets.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).forEach(addTicketToTable);
+    refreshStats();
+  }catch(err){ console.error(err); }
+}
+
+function addTicketToTable(ticket){
+  const tr=document.createElement("tr"); 
+  tr.id=ticket._id; 
+  tr.className="status-"+ticket.status;
+  tr.innerHTML=`<td>${ticket.title}</td>
+  <td>${ticket.department}</td>
+  <td>${ticket.description||""}</td>
+  <td>${ticket.createdBy||""}</td>
+  <td>${ticket.location||""}</td>
+  <td>${ticket.priority||""}</td>
+  <td>${ticket.createdAt?new Date(ticket.createdAt).toLocaleString():""}</td>
+  <td>${ticket.status}</td>
+  <td>${ticket.assignedTo||""}</td>
+  <td>
+    ${ticket.status==="open"?`<button class="table-btn" onclick="assignTicket('${ticket._id}')">استلام الطلب</button>`:""}
+    ${ticket.status!=="closed"?`<button class="table-btn" onclick="closeTicket('${ticket._id}')">إغلاق الطلب</button>`:""}
+  </td>`;
   ticketsTableBody.appendChild(tr);
 }
 
-// تحديث صف موجود
-function updateTicketInTable(ticket) {
-  const tr = document.getElementById(ticket._id);
-  if (!tr) return;
-  tr.className = "status-" + ticket.status;
-  tr.innerHTML = `
-    <td>${ticket.title}</td>
-    <td>${ticket.department}</td>
-    <td>${ticket.description || ""}</td>
-    <td>${ticket.createdBy || ""}</td>
-    <td>${ticket.location || ""}</td>
-    <td>${ticket.status}</td>
-    <td>${ticket.assignedTo || ""}</td>
-    <td>
-      ${ticket.status === "open" ? `<button onclick="assignTicket('${ticket._id}')">استلام الطلب</button>` : ""}
-      ${ticket.status !== "closed" ? `<button onclick="closeTicket('${ticket._id}')">إغلاق الطلب</button>` : ""}
-    </td>
-  `;
+function updateTicketInTable(ticket){
+  const tr=document.getElementById(ticket._id); if(!tr) return;
+  tr.className="status-"+ticket.status;
+  tr.children[0].textContent=ticket.title;
+  tr.children[1].textContent=ticket.department;
+  tr.children[2].textContent=ticket.description||"";
+  tr.children[3].textContent=ticket.createdBy||"";
+  tr.children[4].textContent=ticket.location||"";
+  tr.children[5].textContent=ticket.priority||"";
+  tr.children[6].textContent=ticket.createdAt?new Date(ticket.createdAt).toLocaleString():"";
+  tr.children[7].textContent=ticket.status;
+  tr.children[8].textContent=ticket.assignedTo||"";
 }
 
-// تحميل الطلبات عند فتح الصفحة
-async function loadTickets() {
-  try {
-    const res = await fetch("/api/tickets");
-    const tickets = await res.json();
-    ticketsTableBody.innerHTML = "";
-    tickets.forEach(addTicketToTable);
-  } catch (err) {
-    console.error(err);
-  }
+function refreshStats(){
+  const tickets=Array.from(ticketsTableBody.children).map(tr=>({
+    assignedTo: tr.children[8].textContent,
+    status: tr.children[7].textContent
+  }));
+  document.getElementById("totalTickets").textContent=tickets.length;
+  document.getElementById("assignedTickets").textContent=tickets.filter(t=>t.assignedTo).length;
+  document.getElementById("openTickets").textContent=tickets.filter(t=>t.status==="open").length;
 }
 
-// استلام الطلب
-async function assignTicket(id) {
-  const name = prompt("ادخل اسمك لاستلام الطلب:");
-  if (!name) return;
-  try {
-    await fetch(`/api/ticket/${id}/assign`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ assignedTo: name })
+async function assignTicket(id){
+  try{
+    await fetch(`${BASE_URL}/api/ticket/${id}/assign`,{
+      method:"PUT",
+      headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+token }
     });
-  } catch (err) {
-    alert("خطأ: " + err.message);
-  }
+    loadTickets();
+  }catch(err){ showNotification("خطأ: "+err.message); }
 }
 
-// إغلاق الطلب
-async function closeTicket(id) {
-  try {
-    await fetch(`/api/ticket/${id}/close`, { method: "PUT" });
-  } catch (err) {
-    alert("خطأ: " + err.message);
-  }
+async function closeTicket(id){
+  try{
+    await fetch(`${BASE_URL}/api/ticket/${id}/close`,{
+      method:"PUT",
+      headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+token }
+    });
+    loadTickets();
+  }catch(err){ showNotification("خطأ: "+err.message); }
 }
 
-// إشعارات Socket.io
-socket.on("ticketAdded", (ticket) => {
-  addTicketToTable(ticket);
-  notificationSound.play();
-  alert(`طلب جديد تم إضافته:\nالعنوان: ${ticket.title}\nالقسم: ${ticket.department}`);
+form.addEventListener("submit", async e=>{
+  e.preventDefault();
+  const data={
+    title: document.getElementById("title").value,
+    description: document.getElementById("description").value,
+    department: document.getElementById("department").value,
+    priority: document.getElementById("priority").value,
+    location: document.getElementById("location").value,
+    createdBy: createdByInput.value
+  };
+  try{
+    const res = await fetch(`${BASE_URL}/api/ticket`,{
+      method:"POST",
+      headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+token },
+      body: JSON.stringify(data)
+    });
+    const ticket=await res.json();
+    addTicketToTable(ticket);
+    form.reset();
+    createdByInput.value = userName || "";
+    refreshStats();
+  }catch(err){ showNotification("خطأ: "+err.message); }
 });
 
-socket.on("ticketUpdated", (ticket) => {
-  updateTicketInTable(ticket);
-  notificationSound.play();
-  alert(`تم تحديث طلب:\nالعنوان: ${ticket.title}\nالحالة الجديدة: ${ticket.status}`);
-});
+// ===== Employee Modal مع رسم بياني لكل موظف =====
+const showEmployeeStatsBtn = document.getElementById("showEmployeeStats");
+const employeeModal = document.getElementById("employeeModal");
+const closeEmployeeModalBtn = document.getElementById("closeEmployeeModal");
+const employeeTableBody = document.getElementById("employeeTableBody");
 
-// تحميل الطلبات عند بدء التشغيل
+showEmployeeStatsBtn.addEventListener("click", ()=>{
+  updateEmployeeStats();
+  employeeModal.style.display="flex";
+});
+closeEmployeeModalBtn.addEventListener("click", ()=> employeeModal.style.display="none");
+
+function updateEmployeeStats(){
+  const tickets = Array.from(ticketsTableBody.children).map(tr => ({
+    assignedTo: tr.children[8].textContent,
+    status: tr.children[7].textContent,
+    createdAt: tr.children[6].textContent ? new Date(tr.children[6].textContent) : null,
+    department: tr.children[1].textContent
+  }));
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+
+  employeeTableBody.innerHTML = "";
+  employees.forEach(emp=>{
+    const empTickets = tickets.filter(t => t.assignedTo === emp.name);
+    const empTicketsThisMonth = empTickets.filter(t => t.createdAt && t.createdAt.getMonth() === currentMonth && t.createdAt.getFullYear() === currentYear);
+    const empClosedThisMonth = empTicketsThisMonth.filter(t => t.status==='closed');
+
+    const tr = document.createElement("tr");
+    let color = '';
+    if(empClosedThisMonth.length >= 5) color = 'background:#c4ffc4';
+    else if(empClosedThisMonth.length >= 2) color = 'background:#fff8c4';
+    else color = 'background:#ffc4c4';
+
+    tr.setAttribute("style", color);
+
+    const canvasId = "chart-"+emp.name.replace(/\s+/g,'');
+    tr.innerHTML = `<td>${emp.name}</td>
+                    <td>${emp.dept}</td>
+                    <td>${empTicketsThisMonth.length}</td>
+                    <td>${empClosedThisMonth.length}</td>
+                    <td><canvas id="${canvasId}" style="height:50px;"></canvas></td>`;
+    employeeTableBody.appendChild(tr);
+
+    // رسم بياني صغير
+    new Chart(document.getElementById(canvasId), {
+      type:'bar',
+      data:{
+        labels:['مغلق','مستلم'],
+        datasets:[{
+          label:'عدد الطلبات',
+          data:[empClosedThisMonth.length, empTicketsThisMonth.length],
+          backgroundColor:['#28a745','#007bff']
+        }]
+      },
+      options:{ indexAxis:'y', plugins:{ legend:{ display:false } }, scales:{ x:{ beginAtZero:true }, y:{ beginAtZero:true } } }
+    });
+  });
+}
+
 loadTickets();
 </script>
 </body>
